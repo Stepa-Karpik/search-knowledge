@@ -8,3 +8,5 @@ search_knowledge.egg-info/dependency_links.txt
 search_knowledge.egg-info/requires.txt
 search_knowledge.egg-info/top_level.txt
 tests/test_health.py
+tests/test_persistence.py
+tests/test_search.py
