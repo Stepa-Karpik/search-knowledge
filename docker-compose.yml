@@ -18,3 +18,11 @@ services:
     depends_on: [migrator]
     ports:
       - "127.0.0.1:8340:8340"
+    networks:
+      default:
+      ecosystem:
+        aliases: [search-knowledge]
+
+networks:
+  ecosystem:
+    external: true
