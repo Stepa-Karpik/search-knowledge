@@ -10,6 +10,7 @@ GROUP_TITLES = {
     "company": "Компании",
     "person": "Люди",
     "project": "Проекты",
+    "finance": "Финансы",
     "topic": "AI-группы",
 }
 
