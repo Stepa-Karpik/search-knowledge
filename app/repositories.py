@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+import re
+
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models import DocumentEntityLinkModel, EntityModel, SearchDocumentModel
@@ -11,6 +13,7 @@ GROUP_TITLES = {
     "person": "Люди",
     "project": "Проекты",
     "finance": "Финансы",
+    "city": "Города",
     "topic": "AI-группы",
 }
 
@@ -56,11 +59,19 @@ class SearchRepository:
         return sorted(hits, key=lambda hit: hit.score, reverse=True)
 
     def index_entities(self, *, document_id: str, owner_subject_id: str, entities: list[dict[str, str]]) -> list[EntityModel]:
+        self.session.execute(
+            delete(DocumentEntityLinkModel).where(
+                DocumentEntityLinkModel.document_id == document_id,
+                DocumentEntityLinkModel.owner_subject_id == owner_subject_id,
+            )
+        )
         indexed_entities: list[EntityModel] = []
         for item in entities:
             kind = item["kind"].strip().lower()
-            name = item["name"].strip()
-            normalized_name = self._normalize_name(name)
+            name = self._normalize_display_name(kind, item["name"].strip())
+            if not name:
+                continue
+            normalized_name = self._normalize_name(name, kind=kind)
             entity_id = f"{owner_subject_id}:{kind}:{normalized_name}"
             entity = self.session.get(EntityModel, entity_id)
             if entity is None:
@@ -72,6 +83,8 @@ class SearchRepository:
                     normalized_name=normalized_name,
                 )
                 self.session.add(entity)
+            elif kind == "person" and len(name.split()) > len(entity.name.split()):
+                entity.name = name
 
             link_id = f"{document_id}:{entity_id}"
             if self.session.get(DocumentEntityLinkModel, link_id) is None:
@@ -117,5 +130,30 @@ class SearchRepository:
         ]
 
     @staticmethod
-    def _normalize_name(name: str) -> str:
-        return " ".join(name.lower().split())
+    def _normalize_display_name(kind: str, name: str) -> str | None:
+        name = " ".join(name.strip().split())
+        if not name:
+            return None
+        if kind == "person":
+            name = re.sub(
+                r"^(?:арендатор|арендодатель|заказчик|исполнитель|покупатель|продавец|студент|преподаватель|директор|представитель|гражданин|гражданка)\s+",
+                "",
+                name,
+                flags=re.IGNORECASE,
+            ).strip()
+            parts = name.split()
+            stopwords = {"ср", "средняя", "маржа", "минимальная", "максимальная", "пакет", "бонус", "срок", "вариант"}
+            if len(parts) < 2 or len(parts) > 3:
+                return None
+            if {part.lower() for part in parts} & stopwords:
+                return None
+            if any(not re.fullmatch(r"[А-ЯЁ][а-яё]{2,}", part) for part in parts):
+                return None
+        return name
+
+    @staticmethod
+    def _normalize_name(name: str, *, kind: str | None = None) -> str:
+        parts = " ".join(name.lower().split()).split()
+        if kind == "person" and len(parts) >= 2:
+            return " ".join(parts[:2])
+        return " ".join(parts)

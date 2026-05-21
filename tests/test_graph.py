@@ -50,3 +50,29 @@ def test_list_groups_returns_entity_buckets_and_semantic_document_groups():
         {"kind": "person", "title": "Люди", "items": [{"name": "Иван Петров", "document_count": 1}]},
         {"kind": "topic", "title": "AI-группы", "items": [{"name": "финансы", "document_count": 1}]},
     ]
+
+
+def test_index_entities_replaces_stale_links_and_merges_person_roles():
+    repo = make_repo()
+
+    repo.index_entities(
+        document_id='doc_1',
+        owner_subject_id='usr_1',
+        entities=[
+            {'kind': 'person', 'name': 'Арендатор Карпов Степан'},
+            {'kind': 'person', 'name': 'Карпов Степан Викторович'},
+            {'kind': 'person', 'name': 'Ср Маржа Минимальная'},
+            {'kind': 'city', 'name': 'Ростов-на-Дону'},
+        ],
+    )
+    repo.index_entities(
+        document_id='doc_1',
+        owner_subject_id='usr_1',
+        entities=[{'kind': 'person', 'name': 'Карпов Степан Викторович'}],
+    )
+
+    people = repo.list_entities(owner_subject_id='usr_1', kind='person')
+    cities = repo.list_entities(owner_subject_id='usr_1', kind='city')
+
+    assert people == [type(people[0])(kind='person', name='Карпов Степан Викторович', document_count=1)]
+    assert cities == []
